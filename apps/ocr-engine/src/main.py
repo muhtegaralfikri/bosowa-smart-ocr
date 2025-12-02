@@ -23,7 +23,8 @@ ocr_engine = PaddleOCR(use_angle_cls=False, lang="en")
 
 def _run_ocr(image_path: str) -> List[Dict[str, float]]:
     """Run OCR and normalize the result shape."""
-    result = ocr_engine.ocr(image_path, cls=False)
+    # `use_angle_cls` already disabled at init; omit deprecated `cls` arg to avoid predict() errors.
+    result = ocr_engine.ocr(image_path)
     extracted: List[Dict[str, float]] = []
 
     if result and result[0]:
