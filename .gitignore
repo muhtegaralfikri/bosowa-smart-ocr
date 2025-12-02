@@ -1,0 +1,25 @@
+# Node
+node_modules/
+dist/
+.next/
+
+# Python
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+env/
+
+# Environment Variables
+.env
+.env.*
+
+# Uploads & Temp
+apps/backend/uploads/*
+!apps/backend/uploads/.gitkeep
+apps/ocr-engine/temp/*
+!apps/ocr-engine/temp/.gitkeep
+
+# OS Junk
+.DS_Store
+Thumbs.db
