@@ -1,6 +1,16 @@
 import os
+from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Dict, List
+
+PADDLE_CACHE_DIR = Path(__file__).resolve().parent.parent / "paddle_cache"
+# Force Paddle/PaddleX caches into a repo-local folder to avoid permission issues on some hosts.
+PADDLE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+os.environ["PADDLE_HOME"] = str(PADDLE_CACHE_DIR)
+os.environ["PADDLEX_HOME"] = str(PADDLE_CACHE_DIR)
+os.environ["PADDLEOCR_HOME"] = str(PADDLE_CACHE_DIR)
+os.environ["HOME"] = str(PADDLE_CACHE_DIR)
+os.environ["USERPROFILE"] = str(PADDLE_CACHE_DIR)
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from paddleocr import PaddleOCR

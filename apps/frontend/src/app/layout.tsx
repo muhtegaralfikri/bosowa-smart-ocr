@@ -1,9 +1,9 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
-import { Space_Grotesk } from 'next/font/google';
+import { Sora } from 'next/font/google';
 import './globals.css';
 
-const spaceGrotesk = Space_Grotesk({ subsets: ['latin'], variable: '--font-space-grotesk' });
+const sora = Sora({ subsets: ['latin'], variable: '--font-sora' });
 
 export const metadata: Metadata = {
   title: 'Bosowa Smart OCR',
@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={`${spaceGrotesk.variable}`}>
+    <html lang="en" className={`${sora.variable}`}>
       <body className="font-body bg-transparent">{children}</body>
     </html>
   );

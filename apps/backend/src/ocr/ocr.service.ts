@@ -5,6 +5,10 @@ import FormData from 'form-data';
 
 type OcrResponse = unknown;
 
+const PYTHON_SERVICE_URL =
+  process.env.PYTHON_SERVICE_URL?.replace(/\/+$/, '') ||
+  'http://127.0.0.1:8000';
+
 @Injectable()
 export class OcrService {
   constructor(private readonly httpService: HttpService) {}
@@ -21,7 +25,7 @@ export class OcrService {
       // Gunakan firstValueFrom untuk mengubah Observable (RxJS) jadi Promise
       const response = await firstValueFrom(
         this.httpService.post<OcrResponse>(
-          'http://127.0.0.1:8000/process-ocr',
+          `${PYTHON_SERVICE_URL}/process-ocr`,
           formData,
           {
             headers: {

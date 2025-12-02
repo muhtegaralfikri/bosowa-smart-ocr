@@ -11,8 +11,8 @@ const config: Config = {
         teal: '#0ea5e9',
       },
       fontFamily: {
-        display: ['var(--font-space-grotesk)', 'sans-serif'],
-        body: ['var(--font-space-grotesk)', 'system-ui', 'sans-serif'],
+        display: ['var(--font-sora)', 'sans-serif'],
+        body: ['var(--font-sora)', 'system-ui', 'sans-serif'],
       },
     },
   },
