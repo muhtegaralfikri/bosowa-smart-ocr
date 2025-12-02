@@ -44,7 +44,7 @@ function toCroppedBlob(image: HTMLImageElement, crop: PixelCrop): Promise<Blob |
 }
 
 export default function ImageCropper({ src, onCancel, onConfirm, loading }: ImageCropperProps) {
-  const [crop, setCrop] = useState<Crop>({ unit: '%', width: 80, x: 10, y: 10, aspect: 0 });
+  const [crop, setCrop] = useState<Crop>({ unit: '%', width: 80, height: 80, x: 10, y: 10 });
   const [completedCrop, setCompletedCrop] = useState<PixelCrop | null>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
 
