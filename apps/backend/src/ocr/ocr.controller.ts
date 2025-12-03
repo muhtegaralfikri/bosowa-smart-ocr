@@ -9,13 +9,16 @@ import {
   Body,
   Get,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 import { OcrService } from './ocr.service';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UpdateStatusDto } from './dto/update-status.dto';
 import { SearchDto } from './dto/search.dto';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @Controller('ocr')
+@UseGuards(JwtAuthGuard)
 export class OcrController {
   constructor(private readonly ocrService: OcrService) {}
 

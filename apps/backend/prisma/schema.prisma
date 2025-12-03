@@ -22,19 +22,29 @@ enum DocStatus {
 
 model Document {
   id        String    @id @default(uuid())
-  fileName  String    @map("file_name")
-  filePath  String    @map("file_path")
-  mimeType  String    @map("mime_type")
+  fileName  String    @map("file_name") @db.VarChar(255)
+  filePath  String    @map("file_path") @db.VarChar(255)
+  mimeType  String    @map("mime_type") @db.VarChar(191)
   type      DocType   @default(LAINNYA)
   status    DocStatus @default(PENDING)
-  invoiceNo String?   @map("invoice_no")
-  letterNo  String?   @map("letter_no")
+  invoiceNo String?   @map("invoice_no") @db.VarChar(191)
+  letterNo  String?   @map("letter_no") @db.VarChar(191)
   docDate   DateTime? @map("doc_date")
-  sender    String?
+  sender    String?   @db.VarChar(191)
   amount    Decimal?
   rawOcr    Json?     @map("raw_ocr")
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
 
   @@map("documents")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique @db.VarChar(191)
+  passwordHash String   @map("password_hash") @db.VarChar(191)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("users")
 }
