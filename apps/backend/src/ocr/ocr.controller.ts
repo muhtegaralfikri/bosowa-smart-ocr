@@ -7,10 +7,13 @@ import {
   Patch,
   Param,
   Body,
+  Get,
+  Query,
 } from '@nestjs/common';
 import { OcrService } from './ocr.service';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UpdateStatusDto } from './dto/update-status.dto';
+import { SearchDto } from './dto/search.dto';
 
 @Controller('ocr')
 export class OcrController {
@@ -33,5 +36,10 @@ export class OcrController {
   @Patch(':id/status')
   async updateStatus(@Param('id') id: string, @Body() body: UpdateStatusDto) {
     return this.ocrService.updateStatus(id, body);
+  }
+
+  @Get('search')
+  async search(@Query() query: SearchDto) {
+    return this.ocrService.searchDocuments(query);
   }
 }

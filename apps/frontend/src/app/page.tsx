@@ -7,6 +7,7 @@ import ResultForm from '../components/ResultForm';
 import CameraCapture from '../components/CameraCapture';
 import type { OcrItem } from '../services/ocrService';
 import { submitCroppedImage } from '../services/ocrService';
+import { searchDocuments, type DocumentItem } from '../services/documentService';
 
 export default function HomePage() {
   const [selectedSrc, setSelectedSrc] = useState<string | null>(null);
@@ -16,6 +17,10 @@ export default function HomePage() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [results, setResults] = useState<OcrItem[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [searchInvoice, setSearchInvoice] = useState('');
+  const [searchLetter, setSearchLetter] = useState('');
+  const [searchResults, setSearchResults] = useState<DocumentItem[]>([]);
+  const [searching, setSearching] = useState(false);
 
   useEffect(() => {
     return () => {
@@ -54,6 +59,23 @@ export default function HomePage() {
       setError(message);
     } finally {
       setProcessing(false);
+    }
+  };
+
+  const handleSearch = async () => {
+    setSearching(true);
+    setError(null);
+    try {
+      const data = await searchDocuments({
+        invoiceNo: searchInvoice || undefined,
+        letterNo: searchLetter || undefined,
+      });
+      setSearchResults(data);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to search';
+      setError(message);
+    } finally {
+      setSearching(false);
     }
   };
 
@@ -106,6 +128,57 @@ export default function HomePage() {
               <li>NestJS proxies the file to the FastAPI PaddleOCR engine on port 8000.</li>
               <li>Returned text is shown here for quick review and edits.</li>
             </ul>
+          </div>
+
+          <div className="field-card p-4 bg-white">
+            <h4 className="text-base font-semibold text-ink mb-3">Cari dokumen</h4>
+            <div className="grid grid-cols-1 gap-3">
+              <div>
+                <label className="text-xs font-semibold text-ink/70">Nomor Invoice</label>
+                <input
+                  type="text"
+                  value={searchInvoice}
+                  onChange={(e) => setSearchInvoice(e.target.value)}
+                  className="w-full border border-ink/10 rounded-lg px-3 py-2 mt-1 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  placeholder="INV/2024/001"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-ink/70">Nomor Surat</label>
+                <input
+                  type="text"
+                  value={searchLetter}
+                  onChange={(e) => setSearchLetter(e.target.value)}
+                  className="w-full border border-ink/10 rounded-lg px-3 py-2 mt-1 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  placeholder="SURAT/2024/ABC"
+                />
+              </div>
+              <button
+                type="button"
+                className="button-primary w-full"
+                onClick={handleSearch}
+                disabled={searching}
+              >
+                {searching ? 'Mencari…' : 'Cari'}
+              </button>
+            </div>
+
+            {searchResults.length > 0 && (
+              <div className="mt-4 space-y-3">
+                {searchResults.map((doc) => (
+                  <div key={doc.id} className="border border-ink/5 rounded-lg p-3">
+                    <p className="text-sm font-semibold text-ink">
+                      {doc.invoiceNo || doc.letterNo || doc.fileName}
+                    </p>
+                    <p className="text-xs text-ink/60">Tipe: {doc.type} · Status: {doc.status}</p>
+                    <p className="text-xs text-ink/60">
+                      Invoice: {doc.invoiceNo || '-'} | Surat: {doc.letterNo || '-'}
+                    </p>
+                    <p className="text-xs text-ink/50">Diunggah: {new Date(doc.createdAt).toLocaleString()}</p>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -13,6 +13,7 @@ import { randomUUID } from 'crypto';
 import { DocStatus, DocType, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateStatusDto } from './dto/update-status.dto';
+import { SearchDto } from './dto/search.dto';
 
 type OcrItem = { text?: string; confidence?: number };
 type OcrResponse = { status?: string; data?: OcrItem[] } | unknown;
@@ -91,6 +92,36 @@ export class OcrService {
     return this.prisma.document.update({
       where: { id },
       data: { status },
+    });
+  }
+
+  async searchDocuments(query: SearchDto) {
+    const { invoiceNo, letterNo } = query;
+    if (!invoiceNo && !letterNo) {
+      return [];
+    }
+
+    return this.prisma.document.findMany({
+      where: {
+        AND: [
+          invoiceNo
+            ? {
+                invoiceNo: {
+                  contains: invoiceNo,
+                },
+              }
+            : {},
+          letterNo
+            ? {
+                letterNo: {
+                  contains: letterNo,
+                },
+              }
+            : {},
+        ],
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
     });
   }
 
