@@ -139,16 +139,16 @@ export default function HomePage() {
   };
 
   return (
-    <main className="max-w-6xl mx-auto px-4 py-12 flex flex-col gap-8">
-      <header className="flex flex-col gap-4">
+    <main className="w-full max-w-6xl mx-auto px-4 md:px-6 py-10 flex flex-col gap-8">
+      <header className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-xl bg-primary text-white flex items-center justify-center font-bold">
               B
             </div>
             <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-ink/60">Bosowa Smart OCR</p>
-              <p className="text-sm text-ink/70">Crop · Extract · Edit</p>
+              <p className="text-[11px] uppercase tracking-[0.2em] text-ink/60">Bosowa Smart OCR</p>
+              <p className="text-xs text-ink/70">Crop · Extract · Edit</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -164,11 +164,11 @@ export default function HomePage() {
           </div>
         </div>
 
-        <h1 className="text-4xl md:text-5xl font-semibold text-ink leading-tight">
+        <h1 className="text-3xl md:text-4xl font-semibold text-ink leading-tight">
           Digitize invoices with precision.
           <span className="text-primary"> Crop. Extract. Edit.</span>
         </h1>
-        <p className="text-lg text-ink/70 max-w-3xl">
+        <p className="text-base md:text-lg text-ink/70 max-w-3xl">
           Upload a document, crop the meaningful area, and let the backend orchestrator talk to the Python engine. Tweak the extracted text before saving.
         </p>
       </header>
@@ -179,8 +179,8 @@ export default function HomePage() {
         </div>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2 flex flex-col gap-4">
+      <div className="grid gap-6 lg:grid-cols-[1.4fr,1fr]">
+        <div className="flex flex-col gap-4">
           <ImageUpload
             onFileSelected={handleFileSelected}
             disabled={processing}
@@ -201,7 +201,7 @@ export default function HomePage() {
 
         </div>
 
-        <div className="lg:col-span-1 flex flex-col gap-4">
+        <div className="lg:col-span-1 flex flex-col gap-4 lg:sticky lg:top-6 self-start">
           <div className="field-card p-4 bg-white">
             <div className="flex items-center justify-between mb-2">
               <h4 className="text-base font-semibold text-ink">Detected fields</h4>
@@ -227,14 +227,25 @@ export default function HomePage() {
                     className="w-full border border-ink/10 rounded-lg px-3 py-2 mt-1 focus:outline-none focus:ring-2 focus:ring-primary/30"
                   />
                 </div>
-                <div>
-                  <label className="text-xs font-semibold text-ink/70">Date</label>
-                  <input
-                    type="text"
-                    value={detected.docDate ?? ''}
-                    onChange={(e) => setDetected({ ...detected, docDate: e.target.value })}
-                    className="w-full border border-ink/10 rounded-lg px-3 py-2 mt-1 focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-semibold text-ink/70">Date</label>
+                    <input
+                      type="text"
+                      value={detected.docDate ?? ''}
+                      onChange={(e) => setDetected({ ...detected, docDate: e.target.value })}
+                      className="w-full border border-ink/10 rounded-lg px-3 py-2 mt-1 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-ink/70">Amount</label>
+                    <input
+                      type="text"
+                      value={detected.amount?.toString() ?? ''}
+                      onChange={(e) => setDetected({ ...detected, amount: e.target.value })}
+                      className="w-full border border-ink/10 rounded-lg px-3 py-2 mt-1 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    />
+                  </div>
                 </div>
                 <div>
                   <label className="text-xs font-semibold text-ink/70">Sender</label>
@@ -266,15 +277,6 @@ export default function HomePage() {
                   </div>
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-ink/70">Amount</label>
-                  <input
-                    type="text"
-                    value={detected.amount?.toString() ?? ''}
-                    onChange={(e) => setDetected({ ...detected, amount: e.target.value })}
-                    className="w-full border border-ink/10 rounded-lg px-3 py-2 mt-1 focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  />
-                </div>
-                <div>
                   <label className="text-xs font-semibold text-ink/70">Address</label>
                   <textarea
                     value={detected.address ?? ''}
@@ -288,16 +290,18 @@ export default function HomePage() {
               <p className="text-sm text-ink/60">Upload dan crop untuk melihat hasil deteksi otomatis.</p>
             )}
           </div>
-          <div className="flex flex-col gap-3">
-            <ResultForm items={results} onChange={setResults} />
-            <button
-              type="button"
-              className="button-primary w-full"
-              onClick={handleSave}
-              disabled={!documentId || !token}
-            >
-              Simpan Perubahan
-            </button>
+          <div className="field-card p-4 bg-white">
+            <div className="flex flex-col gap-3">
+              <ResultForm items={results} onChange={setResults} />
+              <button
+                type="button"
+                className="button-primary self-end px-6"
+                onClick={handleSave}
+                disabled={!documentId || !token}
+              >
+                Simpan Perubahan
+              </button>
+            </div>
           </div>
           <div className="field-card p-4 bg-white">
             <h4 className="text-base font-semibold text-ink mb-3">Cari dokumen</h4>

@@ -72,6 +72,7 @@ export class OcrService {
         ((ocrResult as { data?: OcrItem[] })?.data as OcrItem[]) ||
         ((Array.isArray(ocrResult) ? ocrResult : []) as OcrItem[]);
       const savedFile = await this.saveUploadedFile(file);
+      const extracted = this.parseMetadata(flattenedData);
       const document = await this.persistDocument(
         ocrResult,
         flattenedData,
@@ -82,7 +83,7 @@ export class OcrService {
         status: 'success',
         documentId: document.id,
         data: flattenedData,
-        extracted: this.parseMetadata(flattenedData),
+        extracted: this.presentMetadata(extracted),
       };
     } catch (error: unknown) {
       if (error instanceof Error) {
@@ -113,8 +114,10 @@ export class OcrService {
     if (dto.invoiceNo !== undefined) data.invoiceNo = dto.invoiceNo || null;
     if (dto.letterNo !== undefined) data.letterNo = dto.letterNo || null;
     if (dto.docDate !== undefined) {
-      const parsed = dto.docDate ? new Date(dto.docDate) : null;
-      data.docDate = parsed && !Number.isNaN(parsed.getTime()) ? parsed : null;
+      const parsed = dto.docDate
+        ? (this.parseDate(String(dto.docDate)) ?? null)
+        : null;
+      data.docDate = parsed;
     }
     if (dto.sender !== undefined) data.sender = dto.sender || null;
     if (dto.amount !== undefined) {
@@ -232,26 +235,11 @@ export class OcrService {
         /(?:invoice\s*(?:no|number|#)?\s*[:-]?\s*)([A-Z0-9/-]{5,})/i,
       ) ||
       texts.find((t) => /^inv[-\s]/i.test(t))?.match(/(inv[-\s]?[A-Z0-9/-]+)/i);
-    const letterMatch =
-      joined.match(
-        /(?:surat|letter)\s*(?:no|number|#)?\s*[:-]?\s*([A-Z0-9/-]{3,})/i,
-      ) ||
-      texts
-        .find((t) => /^no\b/i.test(t))
-        ?.match(/(?:no|nomor)[\s.:]*([A-Z0-9/-]+)/i);
-
-    const dateMatch =
-      joined.match(
-        /(\d{1,2}(?:st|nd|rd|th)?\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{2,4})/i,
-      ) ||
-      joined.match(
-        /(\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/]\d{1,2}[-/]\d{2,4})/,
-      );
+    const letterMatch = this.extractLetterNo(texts, joined);
 
     const emailMatch = joined.match(/([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i);
-    const phoneMatch = joined.match(
-      /(\+?\d{2,3}[-\s.]?\d{3,4}[-\s.]?\d{3,4,})/,
-    );
+    const phoneMatch = this.extractPhoneNumber(texts, joined);
+    const dateString = this.extractDate(texts, joined);
 
     const amountMatch = joined.match(
       /(?:rp\.?\s*)?([\d]{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})?)/i,
@@ -266,7 +254,7 @@ export class OcrService {
         /\d{3,} [A-Za-z]/.test(t),
     );
 
-    const docDate = dateMatch ? this.parseDate(dateMatch[1]) : undefined;
+    const docDate = dateString ? this.parseDate(dateString) : undefined;
     const amount = amountMatch ? this.parseAmount(amountMatch[1]) : undefined;
     const type = invoiceMatch
       ? DocType.INVOICE
@@ -276,59 +264,168 @@ export class OcrService {
 
     return {
       invoiceNo: invoiceMatch?.[1],
-      letterNo: letterMatch?.[1],
+      letterNo: letterMatch,
       docDate,
       sender: senderMatch ? senderMatch.trim() : undefined,
       amount,
       type,
       address: addressCandidate,
       email: emailMatch?.[1],
-      phone: phoneMatch?.[1],
+      phone: phoneMatch,
     } satisfies ParsedFields;
+  }
+
+  private presentMetadata(meta: ParsedFields) {
+    return {
+      ...meta,
+      docDate: meta.docDate ? this.formatDate(meta.docDate) : undefined,
+    };
+  }
+
+  private extractDate(lines: string[], joined: string): string | undefined {
+    const patterns: RegExp[] = [
+      /(?:tanggal|tgl|date|issued on|issue date|printed|terbit|diterbitkan)[:.,\s-]*([A-Za-z0-9,./-]{6,})/i,
+      /(\d{1,2}\s+[A-Za-z]{3,}\s+\d{2,4})/i, // 12 Januari 2024
+      /([A-Za-z]{3,}\s+\d{1,2},?\s+\d{2,4})/i, // Januari 12, 2024
+      /(\d{4}[./-]\d{1,2}[./-]\d{1,2})/, // 2024-01-05
+      /(\d{1,2}[./-]\d{1,2}[./-]\d{2,4})/, // 05/01/24 or 05/01/2024
+      /(\d{1,2}\s+[A-Za-z]{3,}\s+\d{2,4})/i, // 05 Jan 24
+    ];
+
+    const findMatch = (text: string) =>
+      patterns.map((pattern) => text.match(pattern)?.[1]).find((val) => !!val);
+
+    const fromLines = lines.map(findMatch).find(Boolean);
+    const fromJoined = findMatch(joined);
+
+    return fromLines ?? fromJoined;
+  }
+
+  private extractLetterNo(lines: string[], joined: string): string | undefined {
+    const patterns: RegExp[] = [
+      /(?:nomor|no\.?|no\s*surat|no\s*dok(?:umen)?|no\s*ref(?:erensi)?|reference|reff|ref|no\.?\s*sj|sj)[:\s.=~-]*([A-Z0-9./-]{2,})/i,
+      /(?:surat|letter)\s*(?:no|number|#)?\s*[:.-=]?\s*([A-Z0-9./-]{2,})/i,
+      /^(?:nomor|no\.?)[:.\s-]*([A-Z0-9./-]{2,})/i,
+    ];
+
+    const findMatch = (text: string) =>
+      patterns.map((pattern) => text.match(pattern)?.[1]).find(Boolean);
+
+    const candidate = lines.map(findMatch).find(Boolean) ?? findMatch(joined);
+    if (!candidate) return undefined;
+    if (/^inv/i.test(candidate)) return undefined;
+    return candidate;
+  }
+
+  // Try to capture telp/HP/fax numbers with common Indonesian formatting.
+  private extractPhoneNumber(
+    lines: string[],
+    joined: string,
+  ): string | undefined {
+    const labeledPattern =
+      /(?:telp|tel|tlp|hp|mobile|phone|telepon|fax|facsimile)[:.\s-]*([+0(]?\d[\d\s()./-]{5,})/i;
+    const fallbackPattern =
+      /([+0]?\d{2,4}[\s().-]?\d{3,4}[\s().-]?\d{3,5}(?:[\s().-]?\d{2,5})?)/;
+
+    const labeledMatch =
+      lines
+        .map((text) => text.match(labeledPattern)?.[1])
+        .find((val) => !!val) || joined.match(labeledPattern)?.[1];
+    const raw = labeledMatch ?? joined.match(fallbackPattern)?.[1];
+
+    return raw ? this.normalizePhoneNumber(raw) : undefined;
+  }
+
+  private normalizePhoneNumber(raw: string): string | undefined {
+    const firstSegment = raw.split(/[/|;]/)[0] || raw;
+    const normalized = firstSegment
+      .replace(/[^+\d]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    const digitsOnly = normalized.replace(/\D/g, '');
+    if (digitsOnly.length < 7) return undefined;
+
+    return normalized;
+  }
+
+  private formatDate(date: Date): string {
+    try {
+      return date.toLocaleDateString('id-ID', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+        timeZone: 'UTC',
+      });
+    } catch {
+      // Fallback to ISO-like without time.
+      const yyyy = date.getUTCFullYear();
+      const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
+      const dd = String(date.getUTCDate()).padStart(2, '0');
+      return `${dd}/${mm}/${yyyy}`;
+    }
   }
 
   private parseDate(input: string): Date | undefined {
     const months: Record<string, number> = {
       jan: 1,
       january: 1,
+      januari: 1,
       feb: 2,
       february: 2,
+      februari: 2,
       mar: 3,
       march: 3,
+      maret: 3,
       apr: 4,
       april: 4,
       may: 5,
+      mei: 5,
       jun: 6,
       june: 6,
+      juni: 6,
       jul: 7,
       july: 7,
+      juli: 7,
       aug: 8,
       august: 8,
+      ags: 8,
+      agustus: 8,
       sep: 9,
       sept: 9,
       september: 9,
       oct: 10,
       october: 10,
+      okt: 10,
+      oktober: 10,
       nov: 11,
       november: 11,
       dec: 12,
       december: 12,
+      des: 12,
+      desember: 12,
     };
 
     const monthName = input.match(
-      /(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t)?(?:ember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)/i,
+      /(Jan(?:uary|uari)?|Feb(?:ruary|ruari)?|Mar(?:ch|et)?|Apr(?:il)?|May|Mei|Jun(?:e|i)?|Jul(?:y|i)?|Aug(?:ust|ustus|s)?|Sep(?:t)?(?:ember)?|Oct(?:ober|ober)?|Okt(?:ober)?|Nov(?:ember)?|Dec(?:ember|ember)?|Des(?:ember)?)/i,
     );
     if (monthName) {
       const dayMatch = input.match(/(\d{1,2})(?:st|nd|rd|th)?/);
       const yearMatch = input.match(/(\d{4})/);
+      const numberParts = input.match(/\d{2,4}/g) ?? [];
+      const fallbackYear = numberParts.length
+        ? Number(numberParts.at(-1))
+        : NaN;
       const month = months[monthName[1].toLowerCase()];
       const day = dayMatch ? Number(dayMatch[1]) : NaN;
-      const year = yearMatch ? Number(yearMatch[1]) : NaN;
-      const date = new Date(year, month - 1, day);
+      let year = yearMatch ? Number(yearMatch[1]) : fallbackYear;
+      if (year < 100 && !Number.isNaN(year)) year += 2000;
+      // Use UTC to avoid timezone shifts when serialized.
+      const date = new Date(Date.UTC(year, month - 1, day));
       return Number.isNaN(date.getTime()) ? undefined : date;
     }
 
-    const normalized = input.replace(/-/g, '/');
+    const normalized = input.replace(/[-.]/g, '/');
     const parts = normalized.split('/');
     if (parts.length !== 3) return undefined;
 
@@ -337,7 +434,8 @@ export class OcrService {
     const day = parts[0].length === 4 ? Number(parts[2]) : Number(parts[0]);
 
     if (year < 100) year += 2000;
-    const date = new Date(year, month - 1, day);
+    // Use UTC to avoid timezone shifts when serialized.
+    const date = new Date(Date.UTC(year, month - 1, day));
     return Number.isNaN(date.getTime()) ? undefined : date;
   }
 
