@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Dict, List
+from collections.abc import Mapping, Sequence
 
 PADDLE_CACHE_DIR = Path(__file__).resolve().parent.parent / "paddle_cache"
 # Force Paddle/PaddleX caches into a repo-local folder to avoid permission issues on some hosts.
@@ -21,16 +22,40 @@ app = FastAPI()
 ocr_engine = PaddleOCR(use_angle_cls=False, lang="en")
 
 
+def _extract_from_new_api(page_result: Mapping) -> List[Dict[str, float]]:
+    """Handle PaddleOCR >=3.x output (OCRResult dict)."""
+    texts = page_result.get("rec_texts") or []
+    scores = page_result.get("rec_scores") or []
+    return [
+        {"text": str(text), "confidence": float(score)}
+        for text, score in zip(texts, scores)
+    ]
+
+
+def _extract_from_legacy_api(lines: Sequence) -> List[Dict[str, float]]:
+    """Handle PaddleOCR <3.x output (list of boxes + (text, score))."""
+    extracted: List[Dict[str, float]] = []
+    for line in lines:
+        if not line or len(line) < 2:
+            continue
+        text_info = line[1]
+        if isinstance(text_info, Sequence) and len(text_info) >= 2:
+            text, confidence = text_info[0], text_info[1]
+            extracted.append({"text": str(text), "confidence": float(confidence)})
+    return extracted
+
+
 def _run_ocr(image_path: str) -> List[Dict[str, float]]:
     """Run OCR and normalize the result shape."""
     # `use_angle_cls` already disabled at init; omit deprecated `cls` arg to avoid predict() errors.
     result = ocr_engine.ocr(image_path)
     extracted: List[Dict[str, float]] = []
 
-    if result and result[0]:
-        for line in result[0]:
-            text, confidence = line[1]
-            extracted.append({"text": text, "confidence": float(confidence)})
+    for item in result or []:
+        if isinstance(item, Mapping):
+            extracted.extend(_extract_from_new_api(item))
+        elif isinstance(item, Sequence) and not isinstance(item, (str, bytes, bytearray)):
+            extracted.extend(_extract_from_legacy_api(item))
 
     return extracted
 
