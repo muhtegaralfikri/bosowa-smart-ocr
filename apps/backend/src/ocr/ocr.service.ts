@@ -52,13 +52,16 @@ export class OcrService {
       );
 
       const ocrResult = response.data;
+      // Python service already wraps result as { status, data }; flatten here for frontend.
+      const flattenedData =
+        (ocrResult as { data?: unknown })?.data ?? ocrResult ?? [];
       const savedFile = await this.saveUploadedFile(file);
       const document = await this.persistDocument(ocrResult, savedFile);
 
       return {
         status: 'success',
         documentId: document.id,
-        data: ocrResult,
+        data: flattenedData,
       };
     } catch (error: unknown) {
       if (error instanceof Error) {
