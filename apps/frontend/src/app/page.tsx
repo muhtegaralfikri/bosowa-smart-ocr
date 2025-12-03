@@ -4,12 +4,14 @@ import { useEffect, useState } from 'react';
 import ImageCropper from '../components/ImageCropper';
 import ImageUpload from '../components/ImageUpload';
 import ResultForm from '../components/ResultForm';
+import CameraCapture from '../components/CameraCapture';
 import type { OcrItem } from '../services/ocrService';
 import { submitCroppedImage } from '../services/ocrService';
 
 export default function HomePage() {
   const [selectedSrc, setSelectedSrc] = useState<string | null>(null);
   const [showCropper, setShowCropper] = useState(false);
+  const [showCamera, setShowCamera] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [results, setResults] = useState<OcrItem[]>([]);
@@ -30,6 +32,13 @@ export default function HomePage() {
       setResults([]);
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleCameraCapture = (file: File, preview: string) => {
+    setShowCamera(false);
+    setSelectedSrc(preview);
+    // Reuse the same flow as file upload
+    handleFileSelected(file);
   };
 
   const handleCropConfirm = async (blob: Blob, cropPreview: string) => {
@@ -63,7 +72,11 @@ export default function HomePage() {
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2 flex flex-col gap-4">
-          <ImageUpload onFileSelected={handleFileSelected} disabled={processing} />
+          <ImageUpload
+            onFileSelected={handleFileSelected}
+            disabled={processing}
+            onUseCamera={() => setShowCamera(true)}
+          />
 
           {previewUrl && (
             <div className="field-card p-4 flex gap-4 items-center bg-white">
@@ -103,6 +116,13 @@ export default function HomePage() {
           onCancel={() => setShowCropper(false)}
           onConfirm={handleCropConfirm}
           loading={processing}
+        />
+      )}
+
+      {showCamera && (
+        <CameraCapture
+          onCancel={() => setShowCamera(false)}
+          onCapture={handleCameraCapture}
         />
       )}
     </main>

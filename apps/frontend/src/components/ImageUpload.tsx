@@ -1,13 +1,16 @@
 'use client';
 
-import { ChangeEvent } from 'react';
+import { ChangeEvent, useRef } from 'react';
 
 interface ImageUploadProps {
   onFileSelected: (file: File) => void;
   disabled?: boolean;
+  onUseCamera?: () => void;
 }
 
-export default function ImageUpload({ onFileSelected, disabled }: ImageUploadProps) {
+export default function ImageUpload({ onFileSelected, disabled, onUseCamera }: ImageUploadProps) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
@@ -25,20 +28,47 @@ export default function ImageUpload({ onFileSelected, disabled }: ImageUploadPro
           Choose a clear photo or scan of your invoice/letter. You can refine the area in the next step.
         </p>
       </div>
-      <label className="flex flex-col items-center justify-center border-2 border-dashed border-ink/10 rounded-xl p-6 cursor-pointer bg-white hover:border-ink/30 transition">
+      <label
+        className="flex flex-col items-center justify-center border-2 border-dashed border-ink/10 rounded-xl p-6 cursor-pointer bg-white hover:border-ink/30 transition"
+        onClick={() => inputRef.current?.click()}
+      >
         <input
           type="file"
           accept="image/*"
           className="hidden"
+          ref={inputRef}
           onChange={handleFileChange}
           disabled={disabled}
         />
         <div className="text-center">
           <p className="text-lg font-medium text-ink">Drop an image or click to browse</p>
           <p className="text-sm text-ink/60 mt-1">PNG, JPG up to 10MB</p>
-          <button type="button" className="button-primary mt-4" disabled={disabled}>
+          <button
+            type="button"
+            className="button-primary mt-4"
+            disabled={disabled}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              inputRef.current?.click();
+            }}
+          >
             Select image
           </button>
+          {onUseCamera && (
+            <button
+              type="button"
+              className="button-ghost mt-3"
+              disabled={disabled}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onUseCamera();
+              }}
+            >
+              Use camera
+            </button>
+          )}
         </div>
       </label>
     </div>
