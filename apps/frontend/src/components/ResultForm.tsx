@@ -10,17 +10,19 @@ interface ResultFormProps {
 
 export default function ResultForm({ items, onChange }: ResultFormProps) {
   const sanitizeText = (text: string) => text.replace(/^\s*[:：]\s*/, '');
-  const [values, setValues] = useState<OcrItem[]>(
-    items.map((item) => ({ ...item, text: sanitizeText(item.text) })),
-  );
+  const sanitizeItems = (list: OcrItem[]) =>
+    list.map((item) => ({ ...item, text: sanitizeText(item.text) }));
+  const [values, setValues] = useState<OcrItem[]>(sanitizeItems(items));
 
   useEffect(() => {
-    const sanitized = items.map((item) => ({
-      ...item,
-      text: sanitizeText(item.text),
-    }));
+    const sanitized = sanitizeItems(items);
     setValues(sanitized);
-    onChange?.(sanitized);
+    const differs =
+      items.length !== sanitized.length ||
+      items.some((item, idx) => item.text !== sanitized[idx]?.text);
+    if (differs) {
+      onChange?.(sanitized);
+    }
   }, [items, onChange]);
 
   if (!values.length) {
