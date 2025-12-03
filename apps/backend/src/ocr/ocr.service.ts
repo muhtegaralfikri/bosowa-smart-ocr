@@ -256,32 +256,48 @@ export class OcrService {
     const texts = data
       .map((item) => sanitize(item?.text ?? ''))
       .filter(Boolean);
-    const joined = texts.join(' ').replace(/\s+/g, ' ');
-    const lowerJoined = joined.toLowerCase();
+
+    // Header-only analysis for sender detection
+    const headerLines = texts.slice(0, 8);
+    const headerJoined = headerLines.join(' ');
+    const fullJoined = texts.join(' ').replace(/\s+/g, ' ');
+
+    let senderDetected: string | undefined;
+    if (/bosowa/i.test(headerJoined)) {
+      senderDetected = 'BOSOWA (Internal)';
+    } else {
+      const companyMatch = headerJoined.match(
+        /(?:pt|cv|ud|yayasan)\.?\s+[a-z0-9 .,&-]+/i,
+      );
+      if (companyMatch) {
+        senderDetected = companyMatch[0];
+      } else {
+        senderDetected = headerJoined.match(
+          /(?:from|dari)[:\s]+([A-Za-z0-9 .,&-]{3,50})/i,
+        )?.[1];
+      }
+    }
 
     const invoiceMatch =
-      joined.match(
+      fullJoined.match(
         /(?:invoice\s*(?:no|number|#)?\s*[:-]?\s*)([A-Z0-9/-]{5,})/i,
       ) ||
       texts.find((t) => /^inv[-\s]/i.test(t))?.match(/(inv[-\s]?[A-Z0-9/-]+)/i);
-    const letterMatch = this.extractLetterNo(texts, joined);
+    const letterMatch = this.extractLetterNo(texts, fullJoined);
+    const finalRefNumber = invoiceMatch?.[1] || letterMatch;
 
-    const emailMatch = joined.match(/([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i);
-    const phoneMatch = this.extractPhoneNumber(texts, joined);
-    const dateString = this.extractDate(texts, joined);
-    const subjectMatch =
-      texts
-        .find((t) => /(perihal|perkara|perkara|subject|hal|regarding)/i.test(t))
-        ?.replace(/^(perihal|perkara|subject|hal|regarding)[:.\s-]*/i, '') ||
-      undefined;
+    const emailMatch = fullJoined.match(
+      /([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i,
+    );
+    const phoneMatch = this.extractPhoneNumber(texts, fullJoined);
+    const dateString = this.extractDate(texts, fullJoined);
+    const subjectMatch = texts
+      .find((t) => /(perihal|perkara|subject|hal|regarding)/i.test(t))
+      ?.replace(/^(perihal|perkara|subject|hal|regarding)[:.\s-]*/i, '');
 
-    const amountMatch = joined.match(
+    const amountMatch = fullJoined.match(
       /(?:rp\.?\s*)?([\d]{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})?)/i,
     );
-    const senderMatch =
-      joined.match(/(?:from|dari)[:\s]+([A-Za-z0-9 .,&-]{3,50})/i)?.[1] ||
-      texts.find((t) => t.length > 3 && t.length < 80);
-
     const addressCandidate = texts.find(
       (t) =>
         /(jl\.|jalan|street|road|ave|serpong|city|rt|rw)/i.test(t) ||
@@ -292,15 +308,15 @@ export class OcrService {
     const amount = amountMatch ? this.parseAmount(amountMatch[1]) : undefined;
     const type = invoiceMatch
       ? DocType.INVOICE
-      : lowerJoined.includes('surat')
+      : fullJoined.toLowerCase().includes('surat')
         ? DocType.SURAT_RESMI
         : DocType.LAINNYA;
 
     return {
       invoiceNo: invoiceMatch?.[1],
-      letterNo: letterMatch,
+      letterNo: finalRefNumber,
       docDate,
-      sender: senderMatch ? senderMatch.trim() : undefined,
+      sender: senderDetected,
       subject: subjectMatch?.trim(),
       amount,
       type,
@@ -478,6 +494,13 @@ export class OcrService {
     const normalized = input.replace(/\./g, '').replace(/,/g, '.');
     const num = Number(normalized);
     return Number.isFinite(num) ? new Prisma.Decimal(num) : undefined;
+  }
+
+  async getDocumentPath(id: string) {
+    return this.prisma.document.findUnique({
+      where: { id },
+      select: { filePath: true, mimeType: true, fileName: true },
+    });
   }
 
   async requestDelete(documentId: string, userId?: string, reason?: string) {

@@ -11,6 +11,9 @@ import {
   Query,
   UseGuards,
   Req,
+  StreamableFile,
+  Res,
+  NotFoundException,
 } from '@nestjs/common';
 import { OcrService } from './ocr.service';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -22,6 +25,9 @@ import { DeleteRequestDto } from './dto/delete-request.dto';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { Role } from '@prisma/client';
+import type { Response } from 'express';
+import { createReadStream } from 'fs';
+import { join } from 'path';
 
 @Controller('ocr')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -77,5 +83,27 @@ export class OcrController {
     @Req() req: { user?: { userId?: string } },
   ) {
     return this.ocrService.approveDelete(requestId, req.user?.userId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('image/:id')
+  async serveImage(
+    @Param('id') id: string,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const doc = await this.ocrService.getDocumentPath(id);
+    if (!doc) {
+      throw new NotFoundException('Dokumen tidak ditemukan');
+    }
+
+    const fullPath = join(process.cwd(), doc.filePath);
+    const file = createReadStream(fullPath);
+
+    res.set({
+      'Content-Type': doc.mimeType,
+      'Content-Disposition': `inline; filename="${doc.fileName}"`,
+    });
+
+    return new StreamableFile(file);
   }
 }

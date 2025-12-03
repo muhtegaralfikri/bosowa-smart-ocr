@@ -35,3 +35,22 @@ export async function searchDocuments(params: { invoiceNo?: string; letterNo?: s
   const data = (await response.json()) as DocumentItem[];
   return data;
 }
+
+export async function getDocumentImage(id: string, token: string): Promise<string> {
+  if (!token) {
+    throw new Error('Token tidak ditemukan. Silakan login terlebih dahulu.');
+  }
+
+  const response = await fetch(`${BASE_URL}/ocr/image/${id}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error('Gagal memuat gambar');
+  }
+
+  const blob = await response.blob();
+  return URL.createObjectURL(blob);
+}
