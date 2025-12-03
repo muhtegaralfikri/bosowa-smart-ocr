@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import ImageCropper from '../components/ImageCropper';
 import ImageUpload from '../components/ImageUpload';
 import ResultForm from '../components/ResultForm';
@@ -17,14 +18,23 @@ export default function HomePage() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [results, setResults] = useState<OcrItem[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [token, setToken] = useState<string | null>(null);
   const [searchInvoice, setSearchInvoice] = useState('');
   const [searchLetter, setSearchLetter] = useState('');
   const [searchResults, setSearchResults] = useState<DocumentItem[]>([]);
   const [searching, setSearching] = useState(false);
 
   useEffect(() => {
+    const savedToken = localStorage.getItem('accessToken');
+    if (savedToken) {
+      setToken(savedToken);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!previewUrl) return undefined;
     return () => {
-      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      URL.revokeObjectURL(previewUrl);
     };
   }, [previewUrl]);
 
@@ -47,12 +57,17 @@ export default function HomePage() {
   };
 
   const handleCropConfirm = async (blob: Blob, cropPreview: string) => {
+    if (!token) {
+      setError('Harap login terlebih dahulu untuk mengirim OCR.');
+      return;
+    }
+
     setProcessing(true);
     setShowCropper(false);
     setPreviewUrl(cropPreview);
 
     try {
-      const response = await submitCroppedImage(blob);
+      const response = await submitCroppedImage(blob, token);
       setResults(response.data ?? []);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unexpected error';
@@ -63,13 +78,18 @@ export default function HomePage() {
   };
 
   const handleSearch = async () => {
+    if (!token) {
+      setError('Harap login terlebih dahulu untuk mencari dokumen.');
+      return;
+    }
+
     setSearching(true);
     setError(null);
     try {
       const data = await searchDocuments({
         invoiceNo: searchInvoice || undefined,
         letterNo: searchLetter || undefined,
-      });
+      }, token);
       setSearchResults(data);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to search';
@@ -79,10 +99,37 @@ export default function HomePage() {
     }
   };
 
+  const handleLogout = () => {
+    setToken(null);
+    localStorage.removeItem('accessToken');
+  };
+
   return (
     <main className="max-w-6xl mx-auto px-4 py-12 flex flex-col gap-8">
       <header className="flex flex-col gap-4">
-        <p className="text-sm uppercase tracking-[0.25em] text-ink/60">Bosowa Smart OCR</p>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl bg-primary text-white flex items-center justify-center font-bold">
+              B
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-[0.2em] text-ink/60">Bosowa Smart OCR</p>
+              <p className="text-sm text-ink/70">Crop · Extract · Edit</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {token ? (
+              <button type="button" className="button-ghost" onClick={handleLogout}>
+                Logout
+              </button>
+            ) : (
+              <Link href="/auth" className="button-primary">
+                Login / Register
+              </Link>
+            )}
+          </div>
+        </div>
+
         <h1 className="text-4xl md:text-5xl font-semibold text-ink leading-tight">
           Digitize invoices with precision.
           <span className="text-primary"> Crop. Extract. Edit.</span>
@@ -91,6 +138,12 @@ export default function HomePage() {
           Upload a document, crop the meaningful area, and let the backend orchestrator talk to the Python engine. Tweak the extracted text before saving.
         </p>
       </header>
+
+      {error && (
+        <div className="field-card p-4 bg-red-50 border-red-200 text-red-700">
+          {error}
+        </div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2 flex flex-col gap-4">
@@ -112,11 +165,6 @@ export default function HomePage() {
             </div>
           )}
 
-          {error && (
-            <div className="field-card p-4 bg-red-50 border-red-200 text-red-700">
-              {error}
-            </div>
-          )}
         </div>
 
         <div className="lg:col-span-1 flex flex-col gap-4">

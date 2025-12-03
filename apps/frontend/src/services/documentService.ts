@@ -15,12 +15,20 @@ export interface DocumentItem {
 
 const BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:4000';
 
-export async function searchDocuments(params: { invoiceNo?: string; letterNo?: string }) {
+export async function searchDocuments(params: { invoiceNo?: string; letterNo?: string }, token: string) {
+  if (!token) {
+    throw new Error('Token tidak ditemukan. Silakan login terlebih dahulu.');
+  }
+
   const query = new URLSearchParams();
   if (params.invoiceNo) query.set('invoiceNo', params.invoiceNo);
   if (params.letterNo) query.set('letterNo', params.letterNo);
 
-  const response = await fetch(`${BASE_URL}/ocr/search?${query.toString()}`);
+  const response = await fetch(`${BASE_URL}/ocr/search?${query.toString()}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
   if (!response.ok) {
     throw new Error('Failed to search documents');
   }
