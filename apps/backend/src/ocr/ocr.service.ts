@@ -283,7 +283,38 @@ export class OcrService {
         /(?:invoice\s*(?:no|number|#)?\s*[:-]?\s*)([A-Z0-9/-]{5,})/i,
       ) ||
       texts.find((t) => /^inv[-\s]/i.test(t))?.match(/(inv[-\s]?[A-Z0-9/-]+)/i);
-    const letterMatch = this.extractLetterNo(texts, fullJoined);
+
+    const refCandidates = texts
+      .map((line) => line.match(/([A-Z0-9]{2,}[/-][A-Z0-9./-]{2,})/i)?.[1])
+      .filter((c) => c && /\d/.test(c) && c.length >= 5);
+
+    let letterMatch =
+      this.extractLetterNo(texts, fullJoined) || refCandidates[0];
+    // Fallback: try header lines that start with "No" even if formatting is irregular.
+    if (!letterMatch) {
+      const headerNoLine = headerLines.find(
+        (line) =>
+          /^no\b/i.test(line) &&
+          !/pages?/i.test(line) &&
+          /[0-9]/.test(line) &&
+          /[/-]/.test(line),
+      );
+      const cleaned = headerNoLine?.replace(/^no\b[:\s.-]*/i, '').trim();
+      if (cleaned) {
+        letterMatch = cleaned;
+      }
+    }
+    if (!letterMatch) {
+      const nomorLine = texts.find((line) =>
+        /(nomor|no\.?)\s*[:.-]?\s*[A-Z0-9./-]{3,}/i.test(line),
+      );
+      const match = nomorLine?.match(
+        /(nomor|no\.?)\s*[:.-]?\s*([A-Z0-9./-]{3,})/i,
+      );
+      if (match?.[2]) {
+        letterMatch = match[2];
+      }
+    }
     const finalRefNumber = invoiceMatch?.[1] || letterMatch;
 
     const emailMatch = fullJoined.match(
@@ -298,6 +329,19 @@ export class OcrService {
     const amountMatch = fullJoined.match(
       /(?:rp\.?\s*)?([\d]{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})?)/i,
     );
+    const amountCandidates =
+      fullJoined.match(
+        /(?:rp\.?\s*)?([\d]{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})?)/gi,
+      ) || [];
+    const parsedAmounts = amountCandidates
+      .map((m) => {
+        const num = this.parseAmount(m.replace(/rp\.?\s*/i, '') || m);
+        return num ? Number(num) : NaN;
+      })
+      .filter((n) => Number.isFinite(n));
+    const maxAmount = parsedAmounts.length
+      ? Math.max(...parsedAmounts)
+      : undefined;
     const addressCandidate = texts.find(
       (t) =>
         /(jl\.|jalan|street|road|ave|serpong|city|rt|rw)/i.test(t) ||
@@ -305,12 +349,32 @@ export class OcrService {
     );
 
     const docDate = dateString ? this.parseDate(dateString) : undefined;
-    const amount = amountMatch ? this.parseAmount(amountMatch[1]) : undefined;
+    const amount =
+      maxAmount !== undefined
+        ? new Prisma.Decimal(maxAmount)
+        : amountMatch
+          ? this.parseAmount(amountMatch[1])
+          : undefined;
     const type = invoiceMatch
       ? DocType.INVOICE
       : fullJoined.toLowerCase().includes('surat')
         ? DocType.SURAT_RESMI
         : DocType.LAINNYA;
+
+    if (!senderDetected) {
+      const hotelLine = headerLines.find((line) => /\bhotel\b/i.test(line));
+      if (hotelLine) {
+        senderDetected = hotelLine;
+      }
+    }
+    if (!senderDetected) {
+      const companyLine = texts.find((line) =>
+        /^(pt|cv|ud|yayasan)\b/i.test(line),
+      );
+      if (companyLine) {
+        senderDetected = companyLine;
+      }
+    }
 
     return {
       invoiceNo: invoiceMatch?.[1],
