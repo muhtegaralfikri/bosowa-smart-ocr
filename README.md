@@ -79,3 +79,94 @@ The interface focuses on preprocessing the image (cropping) to ensure high OCR a
     }
   ]
 }
+
+## 🗄️ 5. Rancangan Skema Data (MySQL)
+Sederhana: 1 tabel utama `documents` untuk menyimpan file dan hasil OCR mentah + metadata yang bisa diedit user.
+
+| Kolom | Tipe | Keterangan |
+| --- | --- | --- |
+| id | CHAR(36) | PK, UUID v4 (hindari auto-increment) |
+| type | ENUM(INVOICE, SURAT_JALAN, SURAT_RESMI, LAINNYA) | Jenis dokumen |
+| status | ENUM(PENDING, VERIFIED, REJECTED) | Tahapan verifikasi |
+| file_name | VARCHAR | Nama file upload |
+| file_path | VARCHAR | Lokasi file di server (mis. `uploads/...`) |
+| mime_type | VARCHAR | `image/jpeg`, dll. |
+| invoice_no | VARCHAR NULL | Nomor invoice (opsional) |
+| letter_no | VARCHAR NULL | Nomor surat (opsional) |
+| doc_date | DATETIME NULL | Tanggal di dokumen |
+| sender | VARCHAR NULL | Pengirim surat |
+| amount | DECIMAL(18,2) NULL | Total invoice (opsional) |
+| raw_ocr | JSON NULL | Simpan respons mentah dari Python |
+| created_at | DATETIME | Default `CURRENT_TIMESTAMP` |
+| updated_at | DATETIME | `ON UPDATE CURRENT_TIMESTAMP` |
+
+DDL MySQL cepat:
+```sql
+CREATE TABLE documents (
+  id CHAR(36) PRIMARY KEY,
+  type ENUM('INVOICE','SURAT_JALAN','SURAT_RESMI','LAINNYA') NOT NULL DEFAULT 'LAINNYA',
+  status ENUM('PENDING','VERIFIED','REJECTED') NOT NULL DEFAULT 'PENDING',
+  file_name VARCHAR(255) NOT NULL,
+  file_path VARCHAR(255) NOT NULL,
+  mime_type VARCHAR(100) NOT NULL,
+  invoice_no VARCHAR(100),
+  letter_no VARCHAR(100),
+  doc_date DATETIME,
+  sender VARCHAR(255),
+  amount DECIMAL(18,2),
+  raw_ocr JSON,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+```
+
+## ⚙️ 6. Implementasi Kode (Prisma + NestJS + MySQL)
+Contoh `prisma/schema.prisma` untuk MySQL (ikuti `DATABASE_URL` di `apps/backend/.env`):
+```prisma
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum DocType {
+  INVOICE
+  SURAT_RESMI
+  SURAT_JALAN
+  LAINNYA
+}
+
+enum DocStatus {
+  PENDING   // Baru di-scan AI, belum dicek manusia
+  VERIFIED  // Sudah divalidasi/diedit manusia
+  REJECTED  // Gambar buram/tidak terbaca
+}
+
+model Document {
+  id        String    @id @default(uuid())
+  fileName  String
+  filePath  String    @map("file_path")
+  mimeType  String    @map("mime_type")
+  type      DocType   @default(LAINNYA)
+  status    DocStatus @default(PENDING)
+  invoiceNo String?   @map("invoice_no")
+  letterNo  String?   @map("letter_no")
+  docDate   DateTime? @map("doc_date")
+  sender    String?
+  amount    Decimal?
+  rawOcr    Json?     @map("raw_ocr")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  @@map("documents")
+}
+```
+
+Langkah integrasi di backend NestJS:
+1. `cd apps/backend && npm i -D prisma && npx prisma init --datasource-provider mysql` lalu tempel schema di atas.
+2. `npx prisma db push` untuk membuat tabel di MySQL.
+3. `npm i @prisma/client` lalu buat service/repo untuk simpan hasil OCR: setelah `OcrService.processImage` menerima respons Python, simpan `rawOcr` (JSON) dan metadata file ke tabel `documents`.
+4. Untuk upload file fisik, simpan di folder `uploads/` dan catat `file_path` + `mime_type` sesuai Multer.

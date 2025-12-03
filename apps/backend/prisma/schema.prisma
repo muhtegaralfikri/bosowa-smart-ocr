@@ -1,0 +1,40 @@
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum DocType {
+  INVOICE
+  SURAT_RESMI
+  SURAT_JALAN
+  LAINNYA
+}
+
+enum DocStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+model Document {
+  id        String    @id @default(uuid())
+  fileName  String
+  filePath  String    @map("file_path")
+  mimeType  String    @map("mime_type")
+  type      DocType   @default(LAINNYA)
+  status    DocStatus @default(PENDING)
+  invoiceNo String?   @map("invoice_no")
+  letterNo  String?   @map("letter_no")
+  docDate   DateTime? @map("doc_date")
+  sender    String?
+  amount    Decimal?
+  rawOcr    Json?     @map("raw_ocr")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  @@map("documents")
+}
