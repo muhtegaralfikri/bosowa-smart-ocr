@@ -44,7 +44,7 @@ function toCroppedBlob(image: HTMLImageElement, crop: PixelCrop): Promise<Blob |
 }
 
 export default function ImageCropper({ src, onCancel, onConfirm, loading }: ImageCropperProps) {
-  const [crop, setCrop] = useState<Crop>({ unit: '%', width: 80, height: 80, x: 10, y: 10 });
+  const [crop, setCrop] = useState<Crop>();
   const [completedCrop, setCompletedCrop] = useState<PixelCrop | null>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
 
@@ -71,14 +71,23 @@ export default function ImageCropper({ src, onCancel, onConfirm, loading }: Imag
           </button>
         </div>
 
-        <div className="relative w-full aspect-video bg-ink/5 rounded-xl overflow-hidden">
-          <ReactCrop crop={crop} onChange={(value) => setCrop(value)} onComplete={(c) => setCompletedCrop(c)} minWidth={100} minHeight={100}>
+        <div className="relative w-full max-h-[70vh] bg-ink/5 rounded-xl overflow-auto flex items-center justify-center">
+          <ReactCrop
+            crop={crop}
+            onChange={(value) => setCrop(value)}
+            onComplete={(c) => setCompletedCrop(c as PixelCrop)}
+            minWidth={100}
+            minHeight={100}
+            className="max-h-[70vh]"
+          >
             <img
               src={src}
               alt="To be cropped"
-              className="h-full w-full object-contain"
+              className="max-h-[70vh] w-auto object-contain"
               onLoad={(event) => {
-                imageRef.current = event.currentTarget as HTMLImageElement;
+                const img = event.currentTarget as HTMLImageElement;
+                imageRef.current = img;
+                setCrop({ unit: '%', x: 0, y: 0, width: 100, height: 100 });
               }}
             />
           </ReactCrop>

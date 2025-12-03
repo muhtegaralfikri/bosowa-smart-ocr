@@ -24,7 +24,7 @@ export default function ResultForm({ items }: ResultFormProps) {
     <div className="field-card p-6 bg-white">
       <p className="text-xs uppercase tracking-[0.2em] text-ink/50 mb-3">Step 3</p>
       <h3 className="text-xl font-semibold text-ink mb-4">Review and adjust extracted text</h3>
-      <div className="grid gap-4">
+      <div className="grid gap-4 max-h-[60vh] overflow-y-auto pr-1">
         {values.map((item, index) => (
           <div key={`${item.text}-${index}`} className="flex flex-col gap-2">
             <label className="text-sm font-medium text-ink/80">Line {index + 1}</label>
