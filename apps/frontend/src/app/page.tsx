@@ -25,8 +25,7 @@ export default function HomePage() {
   const [documentId, setDocumentId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [token, setToken] = useState<string | null>(null);
-  const [searchInvoice, setSearchInvoice] = useState('');
-  const [searchLetter, setSearchLetter] = useState('');
+  const [searchRef, setSearchRef] = useState('');
   const [searchResults, setSearchResults] = useState<DocumentItem[]>([]);
   const [searching, setSearching] = useState(false);
   const [openingImage, setOpeningImage] = useState<string | null>(null);
@@ -97,10 +96,13 @@ export default function HomePage() {
     setSearching(true);
     setError(null);
     try {
-      const data = await searchDocuments({
-        invoiceNo: searchInvoice || undefined,
-        letterNo: searchLetter || undefined,
-      }, token);
+      const data = await searchDocuments(
+        {
+          invoiceNo: searchRef || undefined,
+          letterNo: searchRef || undefined,
+        },
+        token,
+      );
       setSearchResults(data);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to search';
@@ -261,89 +263,81 @@ export default function HomePage() {
 
         <div className="lg:col-span-1 flex flex-col gap-4 lg:sticky lg:top-4 self-start">
             <div className="field-card p-4 bg-white/85 backdrop-blur-md border border-ink/10 shadow-sm lg:max-h-[520px] flex flex-col">
-            <div className="flex items-center justify-between mb-2">
-              <h4 className="text-base font-semibold text-ink">Detected fields</h4>
-              <span className="text-xs text-ink/50">Auto-filled</span>
-            </div>
-            {detected ? (
-              <div className="grid gap-3 text-sm md:grid-cols-2 max-h-[500px] overflow-auto pr-1">
-                <div className="md:col-span-1">
-                  <label className="text-xs font-semibold text-ink/70">Invoice No</label>
-                  <input
-                    type="text"
-                    value={detected.invoiceNo ?? ''}
-                    onChange={(e) => setDetected({ ...detected, invoiceNo: e.target.value })}
-                    className="w-full border border-ink/10 rounded-lg px-3 py-2 mt-1 focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  />
-                </div>
-                <div className="md:col-span-1">
-                  <label className="text-xs font-semibold text-ink/70">Letter No</label>
-                  <input
-                    type="text"
-                    value={detected.letterNo ?? ''}
-                    onChange={(e) => setDetected({ ...detected, letterNo: e.target.value })}
-                    className="w-full border border-ink/10 rounded-lg px-3 py-2 mt-1 focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  />
-                </div>
-                <div className="md:col-span-1">
-                  <label className="text-xs font-semibold text-ink/70">Date</label>
-                  <input
-                    type="text"
-                    value={detected.docDate ?? ''}
-                    onChange={(e) => setDetected({ ...detected, docDate: e.target.value })}
-                    className="w-full border border-ink/10 rounded-lg px-3 py-2 mt-1 focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  />
-                </div>
-                <div className="md:col-span-1">
-                  <label className="text-xs font-semibold text-ink/70">Amount</label>
-                  <input
-                    type="text"
-                    value={detected.amount?.toString() ?? ''}
-                    onChange={(e) => setDetected({ ...detected, amount: e.target.value })}
-                    className="w-full border border-ink/10 rounded-lg px-3 py-2 mt-1 focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <label className="text-xs font-semibold text-ink/70">Sender</label>
-                  <input
-                    type="text"
-                    value={detected.sender ?? ''}
-                    onChange={(e) => setDetected({ ...detected, sender: e.target.value })}
-                    className="w-full border border-ink/10 rounded-lg px-3 py-2 mt-1 focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  />
-                </div>
-                <div className="md:col-span-1">
-                  <label className="text-xs font-semibold text-ink/70">Email</label>
-                  <input
-                    type="text"
-                    value={detected.email ?? ''}
-                    onChange={(e) => setDetected({ ...detected, email: e.target.value })}
-                    className="w-full border border-ink/10 rounded-lg px-3 py-2 mt-1 focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  />
-                </div>
-                <div className="md:col-span-1">
-                  <label className="text-xs font-semibold text-ink/70">Phone</label>
-                  <input
-                    type="text"
-                    value={detected.phone ?? ''}
-                    onChange={(e) => setDetected({ ...detected, phone: e.target.value })}
-                    className="w-full border border-ink/10 rounded-lg px-3 py-2 mt-1 focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <label className="text-xs font-semibold text-ink/70">Address</label>
-                  <textarea
-                    value={detected.address ?? ''}
-                    onChange={(e) => setDetected({ ...detected, address: e.target.value })}
-                    className="w-full border border-ink/10 rounded-lg px-3 py-2 mt-1 focus:outline-none focus:ring-2 focus:ring-primary/30"
-                    rows={2}
-                  />
-                </div>
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-base font-semibold text-ink">Detected fields</h4>
+                <span className="text-xs text-ink/50">Auto-filled</span>
               </div>
-            ) : (
-              <p className="text-sm text-ink/60">Upload dan crop untuk melihat hasil deteksi otomatis.</p>
-            )}
-          </div>
+              {detected ? (
+                <div className="grid gap-3 text-sm md:grid-cols-2 max-h-[500px] overflow-auto pr-1">
+                  <div className="md:col-span-2">
+                    <label className="text-xs font-semibold text-ink/70">Letter No (Surat/Invoice)</label>
+                    <input
+                      type="text"
+                      value={detected.letterNo ?? detected.invoiceNo ?? ''}
+                      onChange={(e) => setDetected({ ...detected, letterNo: e.target.value, invoiceNo: e.target.value })}
+                      className="w-full border border-ink/10 rounded-lg px-3 py-2 mt-1 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      placeholder="INV/2024/001 atau SURAT/2024/ABC"
+                    />
+                  </div>
+                  <div className="md:col-span-1">
+                    <label className="text-xs font-semibold text-ink/70">Date</label>
+                    <input
+                      type="text"
+                      value={detected.docDate ?? ''}
+                      onChange={(e) => setDetected({ ...detected, docDate: e.target.value })}
+                      className="w-full border border-ink/10 rounded-lg px-3 py-2 mt-1 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    />
+                  </div>
+                  <div className="md:col-span-1">
+                    <label className="text-xs font-semibold text-ink/70">Amount</label>
+                    <input
+                      type="text"
+                      value={detected.amount?.toString() ?? ''}
+                      onChange={(e) => setDetected({ ...detected, amount: e.target.value })}
+                      className="w-full border border-ink/10 rounded-lg px-3 py-2 mt-1 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="text-xs font-semibold text-ink/70">Sender</label>
+                    <input
+                      type="text"
+                      value={detected.sender ?? ''}
+                      onChange={(e) => setDetected({ ...detected, sender: e.target.value })}
+                      className="w-full border border-ink/10 rounded-lg px-3 py-2 mt-1 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    />
+                  </div>
+                  <div className="md:col-span-1">
+                    <label className="text-xs font-semibold text-ink/70">Email</label>
+                    <input
+                      type="text"
+                      value={detected.email ?? ''}
+                      onChange={(e) => setDetected({ ...detected, email: e.target.value })}
+                      className="w-full border border-ink/10 rounded-lg px-3 py-2 mt-1 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    />
+                  </div>
+                  <div className="md:col-span-1">
+                    <label className="text-xs font-semibold text-ink/70">Phone</label>
+                    <input
+                      type="text"
+                      value={detected.phone ?? ''}
+                      onChange={(e) => setDetected({ ...detected, phone: e.target.value })}
+                      className="w-full border border-ink/10 rounded-lg px-3 py-2 mt-1 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="text-xs font-semibold text-ink/70">Address</label>
+                    <textarea
+                      value={detected.address ?? ''}
+                      onChange={(e) => setDetected({ ...detected, address: e.target.value })}
+                      className="w-full border border-ink/10 rounded-lg px-3 py-2 mt-1 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      rows={2}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-ink/60">Upload dan crop untuk melihat hasil deteksi otomatis.</p>
+              )}
+            </div>
             <div className="field-card p-4 bg-white/85 backdrop-blur-md border border-ink/10 shadow-sm">
               <ResultForm
                 items={results}
@@ -366,23 +360,13 @@ export default function HomePage() {
             <h4 className="text-base font-semibold text-ink mb-3">Cari dokumen</h4>
             <div className="grid grid-cols-1 gap-3">
               <div>
-                <label className="text-xs font-semibold text-ink/70">Nomor Invoice</label>
+                <label className="text-xs font-semibold text-ink/70">Nomor Surat / Invoice</label>
                 <input
                   type="text"
-                  value={searchInvoice}
-                  onChange={(e) => setSearchInvoice(e.target.value)}
+                  value={searchRef}
+                  onChange={(e) => setSearchRef(e.target.value)}
                   className="w-full border border-ink/10 rounded-lg px-3 py-2 mt-1 focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  placeholder="INV/2024/001"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-ink/70">Nomor Surat</label>
-                <input
-                  type="text"
-                  value={searchLetter}
-                  onChange={(e) => setSearchLetter(e.target.value)}
-                  className="w-full border border-ink/10 rounded-lg px-3 py-2 mt-1 focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  placeholder="SURAT/2024/ABC"
+                  placeholder="INV/2024/001 atau SURAT/2024/ABC"
                 />
               </div>
               <button
