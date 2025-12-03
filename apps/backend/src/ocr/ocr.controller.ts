@@ -4,9 +4,13 @@ import {
   UseInterceptors,
   UploadedFile,
   BadRequestException,
+  Patch,
+  Param,
+  Body,
 } from '@nestjs/common';
 import { OcrService } from './ocr.service';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { UpdateStatusDto } from './dto/update-status.dto';
 
 @Controller('ocr')
 export class OcrController {
@@ -24,5 +28,10 @@ export class OcrController {
 
     // Panggil service
     return this.ocrService.processImage(file);
+  }
+
+  @Patch(':id/status')
+  async updateStatus(@Param('id') id: string, @Body() body: UpdateStatusDto) {
+    return this.ocrService.updateStatus(id, body);
   }
 }
