@@ -6,9 +6,9 @@
 
 :root {
   color-scheme: light;
-  background: radial-gradient(circle at 20% 20%, #e0f2fe 0, transparent 25%),
-    radial-gradient(circle at 80% 10%, #ffe4e6 0, transparent 25%),
-    linear-gradient(135deg, #f7f2ec 0%, #f9fafb 100%);
+  background: radial-gradient(circle at 20% 20%, #e6f1fb 0, transparent 25%),
+    radial-gradient(circle at 80% 10%, #c8e4ff 0, transparent 25%),
+    linear-gradient(135deg, #eef5fb 0%, #f8fafc 100%);
 }
 
 body {
@@ -22,17 +22,17 @@ a {
 }
 
 .gradient-card {
-  background: linear-gradient(135deg, rgba(14, 165, 233, 0.12), rgba(255, 122, 89, 0.12));
-  border: 1px solid rgba(15, 23, 42, 0.04);
+  background: linear-gradient(135deg, rgba(11, 94, 168, 0.12), rgba(14, 165, 233, 0.12));
+  border: 1px solid rgba(15, 23, 42, 0.05);
   backdrop-filter: blur(8px);
 }
 
 .button-primary {
-  @apply bg-ink text-sand font-semibold rounded-full px-4 py-2 transition hover:-translate-y-0.5 hover:shadow-lg hover:shadow-ink/20 active:translate-y-0;
+  @apply bg-primary text-white font-semibold rounded-full px-4 py-2 transition hover:-translate-y-0.5 hover:shadow-lg hover:shadow-primary/25 active:translate-y-0;
 }
 
 .button-ghost {
-  @apply border border-ink/10 text-ink rounded-full px-4 py-2 transition hover:border-ink/30;
+  @apply border border-primary/20 text-primary rounded-full px-4 py-2 transition hover:border-primary hover:text-primary;
 }
 
 .field-card {

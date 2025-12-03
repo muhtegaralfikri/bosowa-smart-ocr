@@ -22,7 +22,7 @@ enum DocStatus {
 
 model Document {
   id        String    @id @default(uuid())
-  fileName  String
+  fileName  String    @map("file_name")
   filePath  String    @map("file_path")
   mimeType  String    @map("mime_type")
   type      DocType   @default(LAINNYA)

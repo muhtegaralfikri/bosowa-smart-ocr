@@ -7,8 +7,9 @@ const config: Config = {
       colors: {
         sand: '#f7f2ec',
         ink: '#0f172a',
-        coral: '#ff7a59',
-        teal: '#0ea5e9',
+        primary: '#0b5ea8', // Bosowa blue
+        primaryLight: '#e6f1fb',
+        accent: '#0ea5e9',
       },
       fontFamily: {
         display: ['var(--font-sora)', 'sans-serif'],

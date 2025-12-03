@@ -54,7 +54,7 @@ export default function HomePage() {
         <p className="text-sm uppercase tracking-[0.25em] text-ink/60">Bosowa Smart OCR</p>
         <h1 className="text-4xl md:text-5xl font-semibold text-ink leading-tight">
           Digitize invoices with precision.
-          <span className="text-coral"> Crop. Extract. Edit.</span>
+          <span className="text-primary"> Crop. Extract. Edit.</span>
         </h1>
         <p className="text-lg text-ink/70 max-w-3xl">
           Upload a document, crop the meaningful area, and let the backend orchestrator talk to the Python engine. Tweak the extracted text before saving.
