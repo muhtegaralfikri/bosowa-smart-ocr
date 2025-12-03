@@ -3,6 +3,9 @@ import {
   HttpException,
   HttpStatus,
   InternalServerErrorException,
+  NotFoundException,
+  ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
@@ -27,6 +30,7 @@ type ParsedFields = {
   address?: string;
   email?: string;
   phone?: string;
+  subject?: string;
   type?: DocType;
 };
 
@@ -43,7 +47,10 @@ export class OcrService {
     private readonly prisma: PrismaService,
   ) {}
 
-  async processImage(file: Express.Multer.File): Promise<unknown> {
+  async processImage(
+    file: Express.Multer.File,
+    userId?: string,
+  ): Promise<unknown> {
     if (!file) {
       throw new HttpException('File tidak ditemukan!', HttpStatus.BAD_REQUEST);
     }
@@ -77,6 +84,7 @@ export class OcrService {
         ocrResult,
         flattenedData,
         savedFile,
+        userId,
       );
 
       return {
@@ -103,16 +111,41 @@ export class OcrService {
     dto: UpdateStatusDto = { status: DocStatus.VERIFIED },
   ) {
     const status = dto.status ?? DocStatus.VERIFIED;
-    return this.prisma.document.update({
+    const document = await this.prisma.document.findUnique({
+      where: { id },
+      select: { createdBy: true },
+    });
+
+    const updated = await this.prisma.document.update({
       where: { id },
       data: { status },
     });
+
+    if (status === DocStatus.REJECTED && document?.createdBy) {
+      const creator = await this.prisma.user.findUnique({
+        where: { id: document.createdBy },
+        select: { role: true, wrongInputCount: true },
+      });
+      if (creator && creator.role !== 'ADMIN') {
+        await this.prisma.user.update({
+          where: { id: document.createdBy },
+          data: { wrongInputCount: creator.wrongInputCount + 1 },
+        });
+      }
+    }
+
+    return updated;
   }
 
   async updateDocument(id: string, dto: UpdateDocumentDto) {
     const data: Prisma.DocumentUpdateInput = {};
-    if (dto.invoiceNo !== undefined) data.invoiceNo = dto.invoiceNo || null;
-    if (dto.letterNo !== undefined) data.letterNo = dto.letterNo || null;
+    const ref =
+      dto.letterNo !== undefined
+        ? dto.letterNo
+        : dto.invoiceNo !== undefined
+          ? dto.invoiceNo
+          : undefined;
+    if (ref !== undefined) data.letterNo = ref || null;
     if (dto.docDate !== undefined) {
       const parsed = dto.docDate
         ? (this.parseDate(String(dto.docDate)) ?? null)
@@ -120,12 +153,15 @@ export class OcrService {
       data.docDate = parsed;
     }
     if (dto.sender !== undefined) data.sender = dto.sender || null;
+    if (dto.subject !== undefined) data.subject = dto.subject || null;
     if (dto.amount !== undefined) {
       const num = dto.amount
         ? Number(String(dto.amount).replace(/[.,]/g, ''))
         : NaN;
       data.amount = Number.isFinite(num) ? new Prisma.Decimal(num) : null;
     }
+    if (dto.address !== undefined) data.address = dto.address || null;
+    if (dto.phone !== undefined) data.phone = dto.phone || null;
     if (dto.rawOcr !== undefined) {
       data.rawOcr = dto.rawOcr as Prisma.InputJsonValue;
     }
@@ -138,28 +174,16 @@ export class OcrService {
 
   async searchDocuments(query: SearchDto) {
     const { invoiceNo, letterNo } = query;
-    if (!invoiceNo && !letterNo) {
+    const ref = letterNo || invoiceNo;
+    if (!ref) {
       return [];
     }
 
     return this.prisma.document.findMany({
       where: {
-        AND: [
-          invoiceNo
-            ? {
-                invoiceNo: {
-                  contains: invoiceNo,
-                },
-              }
-            : {},
-          letterNo
-            ? {
-                letterNo: {
-                  contains: letterNo,
-                },
-              }
-            : {},
-        ],
+        letterNo: {
+          contains: ref,
+        },
       },
       orderBy: { createdAt: 'desc' },
       take: 50,
@@ -200,8 +224,10 @@ export class OcrService {
     ocrResult: unknown,
     flattenedData: OcrItem[],
     fileMeta: { fileName: string; filePath: string; mimeType: string },
+    userId?: string,
   ) {
     const parsed = this.parseMetadata(flattenedData);
+    const letterCombined = parsed.letterNo || parsed.invoiceNo;
 
     const data: Prisma.DocumentCreateInput = {
       fileName: fileMeta.fileName,
@@ -209,12 +235,15 @@ export class OcrService {
       mimeType: fileMeta.mimeType,
       type: parsed.type ?? DocType.LAINNYA,
       status: DocStatus.PENDING,
-      invoiceNo: parsed.invoiceNo,
-      letterNo: parsed.letterNo,
+      letterNo: letterCombined,
       docDate: parsed.docDate,
       sender: parsed.sender,
+      subject: parsed.subject,
+      address: parsed.address,
+      phone: parsed.phone,
       amount: parsed.amount,
       rawOcr: ocrResult as Prisma.InputJsonValue,
+      createdByUser: userId ? { connect: { id: userId } } : undefined,
     };
 
     return this.prisma.document.create({ data });
@@ -240,6 +269,11 @@ export class OcrService {
     const emailMatch = joined.match(/([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i);
     const phoneMatch = this.extractPhoneNumber(texts, joined);
     const dateString = this.extractDate(texts, joined);
+    const subjectMatch =
+      texts
+        .find((t) => /(perihal|perkara|perkara|subject|hal|regarding)/i.test(t))
+        ?.replace(/^(perihal|perkara|subject|hal|regarding)[:.\s-]*/i, '') ||
+      undefined;
 
     const amountMatch = joined.match(
       /(?:rp\.?\s*)?([\d]{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})?)/i,
@@ -267,6 +301,7 @@ export class OcrService {
       letterNo: letterMatch,
       docDate,
       sender: senderMatch ? senderMatch.trim() : undefined,
+      subject: subjectMatch?.trim(),
       amount,
       type,
       address: addressCandidate,
@@ -443,5 +478,68 @@ export class OcrService {
     const normalized = input.replace(/\./g, '').replace(/,/g, '.');
     const num = Number(normalized);
     return Number.isFinite(num) ? new Prisma.Decimal(num) : undefined;
+  }
+
+  async requestDelete(documentId: string, userId?: string, reason?: string) {
+    if (!userId) {
+      throw new ForbiddenException('User is required for delete request');
+    }
+
+    const document = await this.prisma.document.findUnique({
+      where: { id: documentId },
+      select: { id: true, deletedAt: true },
+    });
+    if (!document) {
+      throw new NotFoundException('Dokumen tidak ditemukan');
+    }
+    if (document.deletedAt) {
+      throw new BadRequestException('Dokumen sudah dihapus');
+    }
+
+    const existing = await this.prisma.deleteRequest.findFirst({
+      where: { documentId, status: 'PENDING' },
+    });
+    if (existing) {
+      return existing;
+    }
+
+    return this.prisma.deleteRequest.create({
+      data: {
+        documentId,
+        requesterId: userId,
+        reason,
+        status: 'PENDING',
+      },
+    });
+  }
+
+  async approveDelete(requestId: string, adminId?: string) {
+    if (!adminId) {
+      throw new ForbiddenException('Admin diperlukan untuk approve delete');
+    }
+
+    const request = await this.prisma.deleteRequest.findUnique({
+      where: { id: requestId },
+      include: { document: true },
+    });
+    if (!request) {
+      throw new NotFoundException('Delete request tidak ditemukan');
+    }
+    if (request.status !== 'PENDING') {
+      throw new BadRequestException('Delete request sudah diproses');
+    }
+
+    const deletedAt = new Date();
+    const updatedRequest = await this.prisma.deleteRequest.update({
+      where: { id: requestId },
+      data: { status: 'APPROVED', updatedAt: deletedAt },
+    });
+
+    await this.prisma.document.update({
+      where: { id: request.documentId },
+      data: { status: DocStatus.REJECTED, deletedAt },
+    });
+
+    return updatedRequest;
   }
 }

@@ -22,5 +22,17 @@ export class UpdateDocumentDto {
   amount?: string;
 
   @IsOptional()
+  @IsString()
+  address?: string;
+
+  @IsOptional()
+  @IsString()
+  phone?: string;
+
+  @IsOptional()
+  @IsString()
+  subject?: string;
+
+  @IsOptional()
   rawOcr?: unknown;
 }

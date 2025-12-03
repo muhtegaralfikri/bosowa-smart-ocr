@@ -1,6 +1,5 @@
 datasource db {
   provider = "mysql"
-  url      = env("DATABASE_URL")
 }
 
 generator client {
@@ -20,6 +19,18 @@ enum DocStatus {
   REJECTED
 }
 
+enum Role {
+  ADMIN
+  SEKRETARIS
+  COSM
+}
+
+enum DeleteStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model Document {
   id        String    @id @default(uuid())
   fileName  String    @map("file_name") @db.VarChar(255)
@@ -27,14 +38,21 @@ model Document {
   mimeType  String    @map("mime_type") @db.VarChar(191)
   type      DocType   @default(LAINNYA)
   status    DocStatus @default(PENDING)
-  invoiceNo String?   @map("invoice_no") @db.VarChar(191)
   letterNo  String?   @map("letter_no") @db.VarChar(191)
   docDate   DateTime? @map("doc_date")
   sender    String?   @db.VarChar(191)
+  subject   String?   @db.VarChar(191)
+  address   String?   @db.VarChar(255)
+  phone     String?   @db.VarChar(50)
   amount    Decimal?
   rawOcr    Json?     @map("raw_ocr")
+  createdBy String?   @map("created_by") @db.VarChar(191)
+  deletedAt DateTime? @map("deleted_at")
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
+
+  createdByUser User? @relation(fields: [createdBy], references: [id])
+  deleteRequests DeleteRequest[]
 
   @@map("documents")
 }
@@ -43,8 +61,27 @@ model User {
   id           String   @id @default(uuid())
   email        String   @unique @db.VarChar(191)
   passwordHash String   @map("password_hash") @db.VarChar(191)
+  role         Role     @default(SEKRETARIS)
+  wrongInputCount Int   @default(0) @map("wrong_input_count")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
+  deleteRequests DeleteRequest[]
+  createdDocuments Document[]
 
   @@map("users")
+}
+
+model DeleteRequest {
+  id         String        @id @default(uuid())
+  documentId String        @map("document_id") @db.VarChar(191)
+  requesterId String       @map("requester_id") @db.VarChar(191)
+  status     DeleteStatus  @default(PENDING)
+  reason     String?       @db.VarChar(255)
+  createdAt  DateTime      @default(now()) @map("created_at")
+  updatedAt  DateTime      @updatedAt @map("updated_at")
+
+  document   Document      @relation(fields: [documentId], references: [id])
+  requester  User          @relation(fields: [requesterId], references: [id])
+
+  @@map("delete_requests")
 }
