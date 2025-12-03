@@ -5,18 +5,23 @@ import type { OcrItem } from '../services/ocrService';
 
 interface ResultFormProps {
   items: OcrItem[];
+  onChange?: (items: OcrItem[]) => void;
 }
 
-export default function ResultForm({ items }: ResultFormProps) {
+export default function ResultForm({ items, onChange }: ResultFormProps) {
   const sanitizeText = (text: string) => text.replace(/^\s*[:：]\s*/, '');
   const [values, setValues] = useState<OcrItem[]>(
     items.map((item) => ({ ...item, text: sanitizeText(item.text) })),
   );
 
   useEffect(() => {
-    setValues(items.map((item) => ({ ...item, text: sanitizeText(item.text) })));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items]);
+    const sanitized = items.map((item) => ({
+      ...item,
+      text: sanitizeText(item.text),
+    }));
+    setValues(sanitized);
+    onChange?.(sanitized);
+  }, [items, onChange]);
 
   if (!values.length) {
     return (
@@ -65,6 +70,7 @@ export default function ResultForm({ items }: ResultFormProps) {
                           const next = [...values];
                           next[index] = { ...item, text: sanitizeText(event.target.value) };
                           setValues(next);
+                          onChange?.(next);
                         }}
                         className="w-full border border-ink/10 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal/40"
                         rows={isLong ? 2 : undefined}

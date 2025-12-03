@@ -6,8 +6,12 @@ import ImageCropper from '../components/ImageCropper';
 import ImageUpload from '../components/ImageUpload';
 import ResultForm from '../components/ResultForm';
 import CameraCapture from '../components/CameraCapture';
-import type { OcrItem } from '../services/ocrService';
-import { submitCroppedImage } from '../services/ocrService';
+import type {
+  ExtractedFields,
+  OcrItem,
+  UpdateDocumentPayload,
+} from '../services/ocrService';
+import { submitCroppedImage, updateDocument } from '../services/ocrService';
 import { searchDocuments, type DocumentItem } from '../services/documentService';
 
 export default function HomePage() {
@@ -17,6 +21,8 @@ export default function HomePage() {
   const [processing, setProcessing] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [results, setResults] = useState<OcrItem[]>([]);
+  const [detected, setDetected] = useState<ExtractedFields | null>(null);
+  const [documentId, setDocumentId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [searchInvoice, setSearchInvoice] = useState('');
@@ -45,6 +51,8 @@ export default function HomePage() {
       setShowCropper(true);
       setError(null);
       setResults([]);
+      setDetected(null);
+      setDocumentId(null);
     };
     reader.readAsDataURL(file);
   };
@@ -69,6 +77,8 @@ export default function HomePage() {
     try {
       const response = await submitCroppedImage(blob, token);
       setResults(response.data ?? []);
+      setDetected(response.extracted ?? null);
+      setDocumentId(response.documentId ?? null);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unexpected error';
       setError(message);
@@ -96,6 +106,30 @@ export default function HomePage() {
       setError(message);
     } finally {
       setSearching(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!token || !documentId) {
+      setError('Tidak ada dokumen untuk disimpan.');
+      return;
+    }
+
+    const payload: UpdateDocumentPayload = {
+      invoiceNo: detected?.invoiceNo,
+      letterNo: detected?.letterNo,
+      docDate: detected?.docDate,
+      sender: detected?.sender,
+      amount: detected?.amount,
+      rawOcr: results,
+    };
+
+    try {
+      await updateDocument(documentId, payload, token);
+      alert('Perubahan berhasil disimpan.');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Gagal menyimpan perubahan';
+      setError(message);
     }
   };
 
@@ -168,16 +202,103 @@ export default function HomePage() {
         </div>
 
         <div className="lg:col-span-1 flex flex-col gap-4">
-          <ResultForm items={results} />
-          <div className="field-card p-4 text-sm text-ink/70 bg-white">
-            <h4 className="text-base font-semibold text-ink mb-2">How it works</h4>
-            <ul className="list-disc list-inside space-y-2">
-              <li>Frontend sends the cropped image to NestJS at <code className="px-1 py-0.5 bg-ink/5 rounded">/ocr/scan</code>.</li>
-              <li>NestJS proxies the file to the FastAPI PaddleOCR engine on port 8000.</li>
-              <li>Returned text is shown here for quick review and edits.</li>
-            </ul>
+          <div className="field-card p-4 bg-white">
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-base font-semibold text-ink">Detected fields</h4>
+              <span className="text-xs text-ink/50">Auto-filled</span>
+            </div>
+            {detected ? (
+              <div className="grid gap-3 text-sm">
+                <div>
+                  <label className="text-xs font-semibold text-ink/70">Invoice No</label>
+                  <input
+                    type="text"
+                    value={detected.invoiceNo ?? ''}
+                    onChange={(e) => setDetected({ ...detected, invoiceNo: e.target.value })}
+                    className="w-full border border-ink/10 rounded-lg px-3 py-2 mt-1 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-ink/70">Letter No</label>
+                  <input
+                    type="text"
+                    value={detected.letterNo ?? ''}
+                    onChange={(e) => setDetected({ ...detected, letterNo: e.target.value })}
+                    className="w-full border border-ink/10 rounded-lg px-3 py-2 mt-1 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-ink/70">Date</label>
+                  <input
+                    type="text"
+                    value={detected.docDate ?? ''}
+                    onChange={(e) => setDetected({ ...detected, docDate: e.target.value })}
+                    className="w-full border border-ink/10 rounded-lg px-3 py-2 mt-1 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-ink/70">Sender</label>
+                  <input
+                    type="text"
+                    value={detected.sender ?? ''}
+                    onChange={(e) => setDetected({ ...detected, sender: e.target.value })}
+                    className="w-full border border-ink/10 rounded-lg px-3 py-2 mt-1 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-semibold text-ink/70">Email</label>
+                    <input
+                      type="text"
+                      value={detected.email ?? ''}
+                      onChange={(e) => setDetected({ ...detected, email: e.target.value })}
+                      className="w-full border border-ink/10 rounded-lg px-3 py-2 mt-1 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-ink/70">Phone</label>
+                    <input
+                      type="text"
+                      value={detected.phone ?? ''}
+                      onChange={(e) => setDetected({ ...detected, phone: e.target.value })}
+                      className="w-full border border-ink/10 rounded-lg px-3 py-2 mt-1 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-ink/70">Amount</label>
+                  <input
+                    type="text"
+                    value={detected.amount?.toString() ?? ''}
+                    onChange={(e) => setDetected({ ...detected, amount: e.target.value })}
+                    className="w-full border border-ink/10 rounded-lg px-3 py-2 mt-1 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-ink/70">Address</label>
+                  <textarea
+                    value={detected.address ?? ''}
+                    onChange={(e) => setDetected({ ...detected, address: e.target.value })}
+                    className="w-full border border-ink/10 rounded-lg px-3 py-2 mt-1 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    rows={2}
+                  />
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-ink/60">Upload dan crop untuk melihat hasil deteksi otomatis.</p>
+            )}
           </div>
-
+          <div className="flex flex-col gap-3">
+            <ResultForm items={results} onChange={setResults} />
+            <button
+              type="button"
+              className="button-primary w-full"
+              onClick={handleSave}
+              disabled={!documentId || !token}
+            >
+              Simpan Perubahan
+            </button>
+          </div>
           <div className="field-card p-4 bg-white">
             <h4 className="text-base font-semibold text-ink mb-3">Cari dokumen</h4>
             <div className="grid grid-cols-1 gap-3">

@@ -16,6 +16,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { UpdateStatusDto } from './dto/update-status.dto';
 import { SearchDto } from './dto/search.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { UpdateDocumentDto } from './dto/update-document.dto';
 
 @Controller('ocr')
 @UseGuards(JwtAuthGuard)
@@ -39,6 +40,14 @@ export class OcrController {
   @Patch(':id/status')
   async updateStatus(@Param('id') id: string, @Body() body: UpdateStatusDto) {
     return this.ocrService.updateStatus(id, body);
+  }
+
+  @Patch(':id')
+  async updateDocument(
+    @Param('id') id: string,
+    @Body() body: UpdateDocumentDto,
+  ) {
+    return this.ocrService.updateDocument(id, body);
   }
 
   @Get('search')

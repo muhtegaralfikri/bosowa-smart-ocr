@@ -14,9 +14,21 @@ import { DocStatus, DocType, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateStatusDto } from './dto/update-status.dto';
 import { SearchDto } from './dto/search.dto';
+import { UpdateDocumentDto } from './dto/update-document.dto';
 
 type OcrItem = { text?: string; confidence?: number };
 type OcrResponse = { status?: string; data?: OcrItem[] } | unknown;
+type ParsedFields = {
+  invoiceNo?: string;
+  letterNo?: string;
+  docDate?: Date;
+  sender?: string;
+  amount?: Prisma.Decimal;
+  address?: string;
+  email?: string;
+  phone?: string;
+  type?: DocType;
+};
 
 const PYTHON_SERVICE_URL =
   process.env.PYTHON_SERVICE_URL?.replace(/\/+$/, '') ||
@@ -70,6 +82,7 @@ export class OcrService {
         status: 'success',
         documentId: document.id,
         data: flattenedData,
+        extracted: this.parseMetadata(flattenedData),
       };
     } catch (error: unknown) {
       if (error instanceof Error) {
@@ -92,6 +105,31 @@ export class OcrService {
     return this.prisma.document.update({
       where: { id },
       data: { status },
+    });
+  }
+
+  async updateDocument(id: string, dto: UpdateDocumentDto) {
+    const data: Prisma.DocumentUpdateInput = {};
+    if (dto.invoiceNo !== undefined) data.invoiceNo = dto.invoiceNo || null;
+    if (dto.letterNo !== undefined) data.letterNo = dto.letterNo || null;
+    if (dto.docDate !== undefined) {
+      const parsed = dto.docDate ? new Date(dto.docDate) : null;
+      data.docDate = parsed && !Number.isNaN(parsed.getTime()) ? parsed : null;
+    }
+    if (dto.sender !== undefined) data.sender = dto.sender || null;
+    if (dto.amount !== undefined) {
+      const num = dto.amount
+        ? Number(String(dto.amount).replace(/[.,]/g, ''))
+        : NaN;
+      data.amount = Number.isFinite(num) ? new Prisma.Decimal(num) : null;
+    }
+    if (dto.rawOcr !== undefined) {
+      data.rawOcr = dto.rawOcr as Prisma.InputJsonValue;
+    }
+
+    return this.prisma.document.update({
+      where: { id },
+      data,
     });
   }
 
@@ -182,26 +220,51 @@ export class OcrService {
   private parseMetadata(data: OcrItem[]) {
     if (!Array.isArray(data)) return {};
 
-    const texts = data.map((item) => (item?.text ?? '').trim()).filter(Boolean);
+    const sanitize = (text: string) => text.replace(/^\s*[:：]\s*/, '').trim();
+    const texts = data
+      .map((item) => sanitize(item?.text ?? ''))
+      .filter(Boolean);
     const joined = texts.join(' ').replace(/\s+/g, ' ');
     const lowerJoined = joined.toLowerCase();
 
-    const invoiceMatch = joined.match(
-      /(?:invoice\s*(?:no|number|#)?[:-]?\s*)([A-Z0-9/-]{5,})/i,
-    );
-    const letterMatch = joined.match(
-      /(?:surat|letter)\s*(?:no|number|#)?[:-]?\s*([A-Z0-9/-]{3,})/i,
-    );
+    const invoiceMatch =
+      joined.match(
+        /(?:invoice\s*(?:no|number|#)?\s*[:-]?\s*)([A-Z0-9/-]{5,})/i,
+      ) ||
+      texts.find((t) => /^inv[-\s]/i.test(t))?.match(/(inv[-\s]?[A-Z0-9/-]+)/i);
+    const letterMatch =
+      joined.match(
+        /(?:surat|letter)\s*(?:no|number|#)?\s*[:-]?\s*([A-Z0-9/-]{3,})/i,
+      ) ||
+      texts
+        .find((t) => /^no\b/i.test(t))
+        ?.match(/(?:no|nomor)[\s.:]*([A-Z0-9/-]+)/i);
+
     const dateMatch =
       joined.match(
+        /(\d{1,2}(?:st|nd|rd|th)?\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{2,4})/i,
+      ) ||
+      joined.match(
         /(\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/]\d{1,2}[-/]\d{2,4})/,
-      ) || null;
+      );
+
+    const emailMatch = joined.match(/([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i);
+    const phoneMatch = joined.match(
+      /(\+?\d{2,3}[-\s.]?\d{3,4}[-\s.]?\d{3,4,})/,
+    );
 
     const amountMatch = joined.match(
       /(?:rp\.?\s*)?([\d]{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})?)/i,
     );
     const senderMatch =
-      joined.match(/(?:from|dari)[:\s]+([A-Za-z0-9 .,&-]{3,50})/i) || null;
+      joined.match(/(?:from|dari)[:\s]+([A-Za-z0-9 .,&-]{3,50})/i)?.[1] ||
+      texts.find((t) => t.length > 3 && t.length < 80);
+
+    const addressCandidate = texts.find(
+      (t) =>
+        /(jl\.|jalan|street|road|ave|serpong|city|rt|rw)/i.test(t) ||
+        /\d{3,} [A-Za-z]/.test(t),
+    );
 
     const docDate = dateMatch ? this.parseDate(dateMatch[1]) : undefined;
     const amount = amountMatch ? this.parseAmount(amountMatch[1]) : undefined;
@@ -215,13 +278,56 @@ export class OcrService {
       invoiceNo: invoiceMatch?.[1],
       letterNo: letterMatch?.[1],
       docDate,
-      sender: senderMatch?.[1]?.trim(),
+      sender: senderMatch ? senderMatch.trim() : undefined,
       amount,
       type,
-    };
+      address: addressCandidate,
+      email: emailMatch?.[1],
+      phone: phoneMatch?.[1],
+    } satisfies ParsedFields;
   }
 
   private parseDate(input: string): Date | undefined {
+    const months: Record<string, number> = {
+      jan: 1,
+      january: 1,
+      feb: 2,
+      february: 2,
+      mar: 3,
+      march: 3,
+      apr: 4,
+      april: 4,
+      may: 5,
+      jun: 6,
+      june: 6,
+      jul: 7,
+      july: 7,
+      aug: 8,
+      august: 8,
+      sep: 9,
+      sept: 9,
+      september: 9,
+      oct: 10,
+      october: 10,
+      nov: 11,
+      november: 11,
+      dec: 12,
+      december: 12,
+    };
+
+    const monthName = input.match(
+      /(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t)?(?:ember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)/i,
+    );
+    if (monthName) {
+      const dayMatch = input.match(/(\d{1,2})(?:st|nd|rd|th)?/);
+      const yearMatch = input.match(/(\d{4})/);
+      const month = months[monthName[1].toLowerCase()];
+      const day = dayMatch ? Number(dayMatch[1]) : NaN;
+      const year = yearMatch ? Number(yearMatch[1]) : NaN;
+      const date = new Date(year, month - 1, day);
+      return Number.isNaN(date.getTime()) ? undefined : date;
+    }
+
     const normalized = input.replace(/-/g, '/');
     const parts = normalized.split('/');
     if (parts.length !== 3) return undefined;
